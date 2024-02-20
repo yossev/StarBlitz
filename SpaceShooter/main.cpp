@@ -13,6 +13,17 @@
     to try different RayLib aspects, Hope you have fun lol
 */
 
+/*
+    TODO LIST FOR THE GAME:
+
+    - [] ADD MORE ENEMIES
+    - [] Better Main Menu Transtions
+    - [] PowerUps
+    - [] Explosion Animation on impact for enemies
+    - [DONE] Lose Music 
+
+*/
+
 struct Bullet {
     Vector2 Position;
     Vector2 Velocity;
@@ -26,6 +37,7 @@ struct Enemy {
     float speed;
     Rectangle bounds;
     Texture2D type;
+    int TypeNumber;
     bool alive;
 };
 
@@ -55,21 +67,22 @@ int main() {
     const int screenHeight = 1024;
     const float shipSpeed = 400.0f;
     const float bulletSpeed = 1400.0f;
-    const float enemySpeed = 150.0f;
+    const float EnemyMediumSpeed = 360.0f;
+    const float EnemySmallSpeed = 450.0f;
     int playerHealth = 400;
     const float healthDecrementRate = 1.0f; // 1 point per second
     bool gameOver = false;
     bool InGame = false;
     // Music for the main game
     Music MainMusic = LoadMusicStream("C:/Users/PC/Downloads/music.mp3");
-    
+
 
     // Main menu timers
     float waitTime = 0.5f;
 
     SetTargetFPS(60);
 
-    
+
     InitWindow(screenWidth, screenHeight, "Space Shooter");
     InitAudioDevice();
 
@@ -81,7 +94,9 @@ int main() {
     Texture2D bulletSprite = LoadTexture("C:/Users/PC/Downloads/laser.png");
     Texture2D GameBackground = LoadTexture("C:/Users/PC/Downloads/background.gif");
     Sound gunSound = LoadSound("C:/Users/PC/Downloads/Music/laserGun.mp3");
-    Texture2D explosionSprite = LoadTexture("C:/Users/PC/Downloads/Compressed/explosion.png"); // Explosion sprite
+    Sound explosionSound = LoadSound("C:/Users/PC/Downloads/explosion.mp3");
+    Sound loseMusic = LoadSound("C:/Users/PC/Downloads/losemusic.wav");
+    bool loseMusicPlayed = false;
     Rectangle sourceRect = { 0, 0, 80, 80 };
     Rectangle ShipBoundaries = { shipPosition.x, shipPosition.y, (float)shipSprite.width, (float)shipSprite.height };
     int currentFrame = 1;
@@ -93,6 +108,13 @@ int main() {
     // - [] Create a List of all textures , randomly pick one of them, adjust speed depending on type 
 
 
+
+    // Handle Explosion Effect on enemy death
+    Texture explosionTexture = LoadTexture("C:/Users/PC/Downloads/Compressed/explosion.png");
+    Rectangle explosionRect = { 0,0,48,48 };
+    int explosionFrameTimer = 0;
+    int currentExplosionFrame = 1;
+    float ExplostionElapsedTime = 0.0f;
 
     const int healthBarWidth = 200;
     const int healthBarHeight = 20;
@@ -106,6 +128,10 @@ int main() {
 
     std::vector<Bullet> bullets;
     std::vector<Enemy> enemies;
+    std::vector<Texture2D> EnemyTypes;
+
+
+
 
     // Main Menu Variables
     Texture2D MenuBackground = LoadTexture("C:/Users/PC/Downloads/background.png");
@@ -113,14 +139,21 @@ int main() {
     bool InMainMenu = true;
 
     // Handle Enemy Sprites 
-    Texture2D GreenEnemy = LoadTexture("C:/Users/PC/Downloads/green_enemy.png");
-    Rectangle GreenEnemySR = { 0,0, 64, 64 }; // SR -> Source Rectangle 
+    Texture2D EnemyMedium = LoadTexture("C:/Users/PC/Downloads/enemyOne.png");
+    Texture2D EnemySmall = LoadTexture("C:/Users/PC/Downloads/enemySmall.png");
+    EnemyTypes = { EnemyMedium, EnemySmall }; // For Now Only 2 Enemies Exist!
+
+
+    Rectangle EnemyMediumSR = { 0,0, 96, 48 }; // SR -> Source Rectangle 
     int currentEnemyFrame = 0;
     float elapsedTime = 0.0f;
     const float frameDelay = 0.5f; // Delay so the frames don't switch too quickly
 
+    Rectangle EnemySmallSR = { 0,0,64,64 };
+
+
     // Stars Effect for background
-    
+
     Star stars[STARS] = { 0 }; // Make 200 Stars
 
     // ****** RANDOMIZE STAR POSITIONS ****** //
@@ -138,6 +171,7 @@ int main() {
         elapsedTime += GetFrameTime();
 
         SetSoundVolume(gunSound, 0.3f);
+        SetSoundVolume(explosionSound, 0.4f);
         SetMusicVolume(MainMusic, 0.6f);
         float FrameTime = GetFrameTime();
         spawnCooldown += GetFrameTime();
@@ -157,10 +191,10 @@ int main() {
             DrawTexture(Title, (screenWidth - Title.width) / 2, (screenHeight / 2) - 400, WHITE);
             // Start Game text Variables
             if (elapsedTime >= waitTime) {
-                    int textWidth = MeasureText("PRESS SPACE TO START!", 50);
-                    int textX = (GetScreenWidth() - textWidth) / 2;
-                    int textY = (GetScreenHeight() / 2) + 300; // Adjust the Y position as needed
-                    DrawText("PRESS SPACE TO START!", textX, textY, 50, WHITE);
+                int textWidth = MeasureText("PRESS SPACE TO START!", 50);
+                int textX = (GetScreenWidth() - textWidth) / 2;
+                int textY = (GetScreenHeight() / 2) + 300; // Adjust the Y position as needed
+                DrawText("PRESS SPACE TO START!", textX, textY, 50, WHITE);
             }
 
             if (elapsedTime >= 2 * waitTime) {
@@ -172,12 +206,18 @@ int main() {
                 InMainMenu = false;
             }
 
-                
+
             EndDrawing();
             continue;
         }
 
+        SetSoundVolume(loseMusic, 0.1f);
         if (gameOver) {
+            if (!loseMusicPlayed) {
+                PlaySound(loseMusic);
+                loseMusicPlayed = true;
+            }
+
             BeginDrawing();
             ClearBackground(BLACK);
             int gameOverTextWidth = MeasureText(gameOverText, 30);
@@ -191,7 +231,7 @@ int main() {
             bullets.clear();
             enemies.clear();
 
-            DrawText(gameOverText, xPos, yPos, 30, WHITE);
+            DrawText(gameOverText, xPos, yPos, 30, RED);
             DrawText("Press ENTER to play again", (screenWidth - pressEnterTextWidth) / 2, yPos + 40, 30, WHITE);
             if (IsKeyPressed(KEY_ENTER)) {
                 gameOver = false;
@@ -202,14 +242,21 @@ int main() {
 
         // Handle Spawn Cooldown for enemies
         if (spawnCooldown >= spawnInterval) {
+            // Pick a random enemy from enemy sprites
+            int randomEnemy = rand() % EnemyTypes.size();
+
             Enemy enemy;
-            enemy.Position = { (float)GetRandomValue(0 + GreenEnemy.width + (GreenEnemy.width / 2), GetScreenWidth()) - GreenEnemy.width, -10 };
-            enemy.Velocity.y = enemySpeed;
-            enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)GreenEnemy.width, (float)GreenEnemy.height };
+            enemy.type = EnemyTypes[randomEnemy];
+            enemy.TypeNumber = randomEnemy;
+            enemy.Position = { (float)GetRandomValue(0 + enemy.type.width + (enemy.type.width / 2), GetScreenWidth()) - enemy.type.width, -10 };
+            enemy.Velocity.y = enemy.TypeNumber == 0 ? EnemyMediumSpeed : EnemySmallSpeed;
+            enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)enemy.type.width, (float)enemy.type.height };
             enemy.alive = true;
             enemies.push_back(enemy);
             spawnCooldown = 0.0;
         }
+
+
 
         // Key input for each keystroke
         if (IsKeyDown(KEY_W)) shipVelocity.y = -shipSpeed;
@@ -305,63 +352,79 @@ int main() {
                     float y = stars[i].y;
 
                     DrawPixel(x, y, WHITE);
-                }
 
 
 
+                    DrawText(TextFormat("SCORE : %i", score), 10, 10, 40, YELLOW);
+                    sourceRect.x = currentFrame * (shipSprite.width / 3);
+                    EnemyMediumSR.x = currentEnemyFrame * (EnemyMedium.width / 2);
+                    EnemySmallSR.x = currentEnemyFrame * (EnemySmall.width);
+                    for (auto& bullet : bullets) DrawTexture(bulletSprite, bullet.Position.x, bullet.Position.y, WHITE);
+                    for (auto& enemy : enemies) DrawTextureRec(enemy.type, enemy.TypeNumber == 0 ? EnemyMediumSR : EnemySmallSR, enemy.Position, WHITE);
 
 
-                DrawText(TextFormat("SCORE : %i", score), 10, 10, 40, YELLOW);
-                DrawHealthBar(healthBarX, healthBarY, healthBarWidth, healthBarHeight, playerHealth);
-                sourceRect.x = currentFrame * (shipSprite.width / 3);
-                GreenEnemySR.x = currentEnemyFrame * (GreenEnemy.width / 3);
-                for (auto& bullet : bullets) DrawTexture(bulletSprite, bullet.Position.x, bullet.Position.y, WHITE);
-                for (auto& enemy : enemies) DrawTextureRec(GreenEnemy, GreenEnemySR, enemy.Position, WHITE);
 
-                // Draw explosion at enemy position if alive
-                for (auto& bullet : bullets) {
-                    bullet.bounds = { bullet.Position.x, bullet.Position.y, (float)bulletSprite.width, (float)bulletSprite.height };
+                    // Draw explosion at enemy position if alive
+                    for (auto& bullet : bullets) {
+                        bullet.bounds = { bullet.Position.x, bullet.Position.y, (float)bulletSprite.width, (float)bulletSprite.height };
+                        for (auto& enemy : enemies) {
+                            enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)enemy.type.width, (float)enemy.type.height };
+                            if (CheckCollisionRecs(bullet.bounds, enemy.bounds)) {
+                                PlaySound(explosionSound);
+                                enemy.alive = false;
+                                bullet.alive = false;
+                                score++; // Increment Score when Enemy Dies
+
+                                //***** EXPLOSION HANDLING CODE NOT YET FINISHED *****// 
+
+                                /*ExplostionElapsedTime += deltaTime;
+                                if (ExplostionElapsedTime >= frameDelay) {
+                                    currentExplosionFrame = (currentExplosionFrame + 1) % 5;
+                                    ExplostionElapsedTime = 0.0f;
+                                }
+                                explosionRect.x = currentExplosionFrame * (explosionTexture.width / 5);
+                                DrawTexture(explosionTexture, enemy.Position.x, enemy.Position.y, WHITE);*/
+                            }
+
+                        }
+                    }
+
+
+                    // Handle ship collision with enemies
+                    float healthDecrement = healthDecrementRate * GetFrameTime();
+                    bool shipCollidedThisFrame = false; // make it so the ship collides each one frame only
                     for (auto& enemy : enemies) {
-                        enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)GreenEnemy.width, (float)GreenEnemy.height };
-                        if (CheckCollisionRecs(bullet.bounds, enemy.bounds)) {
-                            enemy.alive = false;
-                            bullet.alive = false;
-                            score++; // Increment Score when Enemy Dies
+                        enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)enemy.type.width, (float)enemy.type.height };
+                        if (!shipCollidedThisFrame && CheckCollisionRecs(enemy.bounds, ShipBoundaries)) {
+                            std::cout << playerHealth << std::endl;
+                            playerHealth -= healthDecrement;
+                            shipCollidedThisFrame = true;
+                            if (playerHealth <= 0) {
+                                gameOver = true;
+
+                            }
                         }
                     }
-                }
 
-                // Handle ship collision with enemies
-                float healthDecrement = healthDecrementRate * GetFrameTime();
-                bool shipCollidedThisFrame = false; // make it so the ship collides each one frame only
-                for (auto& enemy : enemies) {
-                    enemy.bounds = { enemy.Position.x, enemy.Position.y, (float)GreenEnemy.width, (float)GreenEnemy.height };
-                    if (!shipCollidedThisFrame && CheckCollisionRecs(enemy.bounds, ShipBoundaries)) {
-                        std::cout << playerHealth << std::endl;
-                        playerHealth -= healthDecrement;
-                        shipCollidedThisFrame = true;
-                        if (playerHealth <= 0) {
-                            gameOver = true;
-                        }
-                    }
+                    DrawTextureRec(shipSprite, sourceRect, shipPosition, WHITE);
+                    EndDrawing();
                 }
-
-                DrawTextureRec(shipSprite, sourceRect, shipPosition, WHITE);
-                EndDrawing();
             }
         }
-    }
-
-    // Free the Memory
-    UnloadTexture(shipSprite);
-    UnloadTexture(bulletSprite);
-    UnloadTexture(MenuBackground);
-    UnloadTexture(GreenEnemy);
-    UnloadTexture(explosionSprite); // Free explosion sprite
-    UnloadTexture(Title);
-    UnloadMusicStream(MainMusic);
-    UnloadSound(gunSound);
-    CloseWindow();
-    CloseAudioDevice();
-    return 0;
+    }        // Free the Memory
+        UnloadTexture(shipSprite);
+        UnloadTexture(bulletSprite);
+        UnloadTexture(MenuBackground);
+        UnloadTexture(EnemyMedium);
+        UnloadTexture(explosionTexture);
+        UnloadTexture(EnemySmall);
+        UnloadTexture(Title);
+        UnloadTexture(explosionTexture);
+        UnloadMusicStream(MainMusic);
+        UnloadSound(gunSound);
+        UnloadSound(explosionSound);
+        UnloadSound(loseMusic);
+        CloseWindow();
+        CloseAudioDevice();
+        return 0;
 }
