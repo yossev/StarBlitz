@@ -312,7 +312,7 @@
 *     3. This notice may not be removed or altered from any source distribution.
 *
 **********************************************************************************************/
-
+/*
 #ifndef RAYGUI_H
 #define RAYGUI_H
 
@@ -5537,3 +5537,8 @@ static int GetCodepointNext(const char* text, int* codepointSize)
 #endif      // RAYGUI_STANDALONE
 
 #endif      // RAYGUI_IMPLEMENTATION
+*/
+
+
+
+// Commented Out the Header File
